@@ -1,0 +1,128 @@
+name: Build SSH Ramdisk
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Make tools executable
+        run: chmod +x pzb img4 gtar
+
+      - name: Download ramdisk
+        run: |
+          set -ex
+
+          IPSW_URL="https://updates.cdn-apple.com/2025SummerFCS/fullrestores/082-99741/496569F8-D658-48C2-ABFB-B6DEBF18438D/iPhone11,8_18.6_22G86_Restore.ipsw"
+
+          ./pzb -g 043-19520-100.dmg "$IPSW_URL"
+
+          ls -lah
+          file 043-19520-100.dmg
+
+      - name: Decrypt ramdisk
+        run: |
+          set -ex
+
+          ./img4 -i 043-19520-100.dmg -o ramdisk.dmg
+
+          ls -lah
+          file ramdisk.dmg
+
+      - name: Mount original and create new ramdisk
+        run: |
+          set -ex
+
+          mkdir -p SSHRD
+
+          echo "===== Mount original ====="
+
+          sudo hdiutil attach \
+            -debug \
+            -verbose \
+            -mountpoint SSHRD \
+            -owners off \
+            ramdisk.dmg
+
+          echo "===== Mounted ====="
+
+          mount | grep SSHRD || true
+          df -h SSHRD
+
+          ls -la SSHRD
+
+          echo "===== Disk usage ====="
+          du -sh SSHRD
+          du -sh -d 1 SSHRD || true
+
+          echo "===== File count ====="
+          find SSHRD | wc -l
+
+          echo "===== Create image ====="
+
+          sudo hdiutil create \
+            -debug \
+            -verbose \
+            -size 254m \
+            -imagekey diskimage-class=CRawDiskImage \
+            -format UDZO \
+            -fs APFS \
+            -layout NONE \
+            -srcfolder SSHRD \
+            -copyuid root \
+            ramdisk1.dmg
+
+          echo "===== Image created ====="
+
+          ls -lah ramdisk1.dmg
+          file ramdisk1.dmg
+
+          echo "===== Detach original ====="
+
+          sudo hdiutil detach -force SSHRD
+
+      - name: Mount new ramdisk and add SSH
+        run: |
+          set -ex
+
+          mkdir -p SSHRD
+
+          sudo hdiutil attach \
+            -debug \
+            -verbose \
+            -mountpoint SSHRD \
+            -owners off \
+            ramdisk1.dmg
+
+          df -h SSHRD
+
+          ls -la SSHRD
+
+          ./gtar -x --no-overwrite-dir -f ssh.tar -C SSHRD
+
+          echo "===== After extraction ====="
+
+          df -h SSHRD
+
+          ls -la SSHRD/usr/local/bin || true
+
+          sudo hdiutil detach -force SSHRD
+
+      - name: Resize image
+        run: |
+          set -ex
+
+          sudo hdiutil resize -debug -verbose -sectors min ramdisk1.dmg
+
+          ls -lah ramdisk1.dmg
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ramdisk-with-ssh
+          path: ramdisk1.dmg
