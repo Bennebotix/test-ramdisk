@@ -18,18 +18,18 @@ jobs:
         run: |
           set -ex
 
-          IPSW_URL="https://updates.cdn-apple.com/2025SummerFCS/fullrestores/082-99741/496569F8-D658-48C2-ABFB-B6DEBF18438D/iPhone11,8_18.6_22G86_Restore.ipsw"
+          IPSW_URL="https://updates.cdn-apple.com/2023FallFCS/fullrestores/042-49415/A6D69931-A729-44D2-AC2A-EB3ED7E20EBB/iPhone11,8_17.0_21A329_Restore.ipsw"
 
-          ./pzb -g 043-19520-100.dmg "$IPSW_URL"
+          ./pzb -g 078-27546-717.dmg "$IPSW_URL"
 
           ls -lah
-          file 043-19520-100.dmg
+          file 078-27546-717.dmg
 
       - name: Decrypt ramdisk
         run: |
           set -ex
 
-          ./img4 -i 043-19520-100.dmg -o ramdisk.dmg
+          ./img4 -i 078-27546-717.dmg -o ramdisk.dmg
 
           ls -lah
           file ramdisk.dmg
