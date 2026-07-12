@@ -68,7 +68,7 @@ jobs:
           sudo hdiutil create \
             -debug \
             -verbose \
-            -size 254m \
+            -size 210m \
             -imagekey diskimage-class=CRawDiskImage \
             -format UDZO \
             -fs APFS \
