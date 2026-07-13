@@ -28,7 +28,7 @@ jobs:
         run: |
           set -ex
 
-          ./img4 -i 078-27546-717.dmg -o ramdisk.dmg
+          ./img4 -i 043-19520-100.dmg -o ramdisk.dmg
 
           ls -lah
           file ramdisk.dmg
