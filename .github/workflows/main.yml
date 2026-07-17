@@ -18,17 +18,26 @@ jobs:
         run: |
           set -ex
 
-          IPSW_URL="https://updates.cdn-apple.com/2025SummerFCS/fullrestores/082-99741/496569F8-D658-48C2-ABFB-B6DEBF18438D/iPhone11,8_18.6_22G86_Restore.ipsw"
-          ./pzb -g 043-19520-100.dmg "$IPSW_URL"
+          IPSW_URL="https://updates.cdn-apple.com/2026WinterFCS/fullrestores/122-34179/047B0DE1-4C17-4CBB-ACA7-1EBBF92EE193/iPhone11,8_18.7.9_22H355_Restore.ipsw"
+
+          # Download BuildManifest and extract ramdisk path
+          ./pzb -g BuildManifest.plist "$IPSW_URL"
+          RAMDISK_PATH=$(grep -A50 "RestoreRamDisk" BuildManifest.plist | grep -A1 "Path" | tail -1 | sed 's/.*<string>\(.*\)<\/string>.*/\1/')
+          echo "Ramdisk path: $RAMDISK_PATH"
+
+          ./pzb -g "$RAMDISK_PATH" "$IPSW_URL"
 
           ls -lah
-          file 078-27546-717.dmg
 
       - name: Decrypt ramdisk
         run: |
           set -ex
 
-          ./img4 -i 043-19520-100.dmg -o ramdisk.dmg
+          # Find the downloaded ramdisk file
+          RAMDISK_FILE=$(ls *.dmg | head -1)
+          echo "Decrypting: $RAMDISK_FILE"
+
+          ./img4 -i "$RAMDISK_FILE" -o ramdisk.dmg
 
           ls -lah
           file ramdisk.dmg
@@ -67,9 +76,9 @@ jobs:
           sudo hdiutil create \
             -debug \
             -verbose \
-            -size 254m \
+            -size 210m \
             -imagekey diskimage-class=CRawDiskImage \
-            -format UDZO \
+            -format UDIF \
             -fs APFS \
             -layout NONE \
             -srcfolder SSHRD \
