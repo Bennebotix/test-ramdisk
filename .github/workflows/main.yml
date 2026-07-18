@@ -18,7 +18,7 @@ jobs:
         run: |
           set -ex
 
-          IPSW_URL="https://updates.cdn-apple.com/2025SummerFCS/fullrestores/082-99339/EBB4A5A0-D65B-4E34-95CB-906CA408CF3A/iPad_10.2_2020_18.6_22G86_Restore.ipsw"
+          IPSW_URL="https://updates.cdn-apple.com/2025WinterFCS/fullrestores/072-67238/0B0AA2FF-B865-48C3-858F-EBECD1D83D41/iPad_10.2_2020_18.3_22D63_Restore.ipsw"
 
           # Download BuildManifest and extract ramdisk path
           ./pzb -g BuildManifest.plist "$IPSW_URL"
