@@ -30,11 +30,7 @@ jobs:
         run: |
           set -ex
           mkdir -p SSHRD
-
-          # Mount original ramdisk
           sudo hdiutil attach -mountpoint SSHRD -owners off ramdisk.dmg
-
-          # Create a new 210MB ramdisk from the mounted contents
           sudo hdiutil create \
             -size 210m \
             -imagekey diskimage-class=CRawDiskImage \
@@ -44,7 +40,6 @@ jobs:
             -srcfolder SSHRD \
             -copyuid root \
             ramdisk1.dmg
-
           sudo hdiutil detach -force SSHRD
 
       - name: Mount new ramdisk and add SSH + mount_filesystems
@@ -52,11 +47,9 @@ jobs:
           set -ex
           mkdir -p SSHRD
           sudo hdiutil attach -mountpoint SSHRD -owners off ramdisk1.dmg
-
           ./gtar -x --no-overwrite-dir -f ssh.tar.gz -C SSHRD
           cp mount_filesystems.safe SSHRD/usr/bin/mount_filesystems
           chmod 755 SSHRD/usr/bin/mount_filesystems
-
           sudo hdiutil detach -force SSHRD
 
       - name: Resize image
@@ -67,12 +60,10 @@ jobs:
         run: |
           set -ex
           ./img4 -i 094-32271-023.dmg.trustcache -o trustcache.bin
-
           mkdir -p work/sshtar
           ./gtar -x --no-overwrite-dir -f ssh.tar.gz -C work/sshtar
           cp mount_filesystems.safe work/sshtar/usr/bin/mount_filesystems
-
-          ./trustcache append trustcache.bin $(cat sshtarlist.txt)
+          ./trustcache append trustcache.bin $(<sshtarlist.txt)
           ./img4 -i trustcache.bin -o trustcache.img4 -A -T rtsc -M IM4M_0x8020
 
       - name: Sign ramdisk
