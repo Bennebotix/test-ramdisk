@@ -52,7 +52,7 @@ if [ -z "$SEP_PATH" ]; then
     echo "ERROR: SEP firmware not found in /mnt6"
     exit 1
 fi
-echo "  Found SEP firmware: $(basename "$SEP_PATH")"
+echo "  Found SEP firmware: $SEP_PATH"
 
 echo "  Initializing SEP..."
 /usr/libexec/seputil --gigalocker-init 2>/dev/null
@@ -105,4 +105,4 @@ fi
 
 echo ""
 echo "=== Mount verification ==="
-mount | grep -E "/mnt[0-9]" | sort
+mount | grep -E "/mnt[0-9]"
