@@ -12,134 +12,58 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Make tools executable
-        run: chmod +x pzb img4 gtar
+        run: chmod +x img4 pzb gtar trustcache
 
-      - name: Download ramdisk
+      - name: Download and decrypt ramdisk
         run: |
           set -ex
+          IPSW_URL="https://updates.cdn-apple.com/2026WinterFCS/fullrestores/122-34179/047B0DE1-4C17-4CBB-ACA7-1EBBF92EE193/iPhone11,8_18.7.9_22H355_Restore.ipsw"
 
-          IPSW_URL="https://updates.cdn-apple.com/2025WinterFCS/fullrestores/072-67238/0B0AA2FF-B865-48C3-858F-EBECD1D83D41/iPad_10.2_2020_18.3_22D63_Restore.ipsw"
-
-          # Download BuildManifest and extract ramdisk path
           ./pzb -g BuildManifest.plist "$IPSW_URL"
-          RAMDISK_PATH=$(grep -A50 "RestoreRamDisk" BuildManifest.plist | grep -A1 "Path" | tail -1 | sed 's/.*<string>\(.*\)<\/string>.*/\1/')
-          echo "Ramdisk path: $RAMDISK_PATH"
 
+          RAMDISK_PATH=$(grep -A50 "RestoreRamDisk" BuildManifest.plist | grep -A1 "Path" | tail -1 | sed 's/.*<string>\(.*\)<\/string>.*/\1/')
           ./pzb -g "$RAMDISK_PATH" "$IPSW_URL"
 
-          ls -lah
-
-      - name: Decrypt ramdisk
-        run: |
-          set -ex
-
-          # Find the downloaded ramdisk file
           RAMDISK_FILE=$(ls *.dmg | head -1)
-          echo "Decrypting: $RAMDISK_FILE"
-
           ./img4 -i "$RAMDISK_FILE" -o ramdisk.dmg
 
-          ls -lah
-          file ramdisk.dmg
-
-      - name: Mount original and create new ramdisk
+      - name: Inject SSH and mount_filesystems into ramdisk
         run: |
           set -ex
-
           mkdir -p SSHRD
-
-          echo "===== Mount original ====="
-
-          sudo hdiutil attach \
-            -debug \
-            -verbose \
-            -mountpoint SSHRD \
-            -owners off \
-            ramdisk.dmg
-
-          echo "===== Mounted ====="
-
-          mount | grep SSHRD || true
-          df -h SSHRD
-
-          ls -la SSHRD
-
-          echo "===== Disk usage ====="
-          du -sh SSHRD
-          du -sh -d 1 SSHRD || true
-
-          echo "===== File count ====="
-          find SSHRD | wc -l
-
-          echo "===== Create image ====="
-
-          sudo hdiutil create \
-            -debug \
-            -verbose \
-            -size 210m \
-            -imagekey diskimage-class=CRawDiskImage \
-            -format UDIF \
-            -fs APFS \
-            -layout NONE \
-            -srcfolder SSHRD \
-            -copyuid root \
-            ramdisk1.dmg
-
-          echo "===== Image created ====="
-
-          ls -lah ramdisk1.dmg
-          file ramdisk1.dmg
-
-          echo "===== Detach original ====="
-
-          sudo hdiutil detach -force SSHRD
-
-      - name: Mount new ramdisk and add SSH + mount_filesystems
-        run: |
-          set -ex
-
-          mkdir -p SSHRD
-
-          sudo hdiutil attach \
-            -debug \
-            -verbose \
-            -mountpoint SSHRD \
-            -owners off \
-            ramdisk1.dmg
-
-          df -h SSHRD
-
-          ls -la SSHRD
-
-          # Extract SSH
-          ./gtar -x --no-overwrite-dir -f ssh.tar -C SSHRD
-
-          # ADD mount_filesystems.safe
-          echo "===== Adding mount_filesystems.safe ====="
+          sudo hdiutil attach -mountpoint SSHRD -owners off ramdisk.dmg
+          ./gtar -x --no-overwrite-dir -f ssh.tar.gz -C SSHRD
           cp mount_filesystems.safe SSHRD/usr/bin/mount_filesystems
           chmod 755 SSHRD/usr/bin/mount_filesystems
-
-          # Verify
-          ls -la SSHRD/usr/bin/mount_filesystems
-
-          echo "===== After extraction ====="
-
-          df -h SSHRD
-
-          ls -la SSHRD/usr/local/bin || true
-
           sudo hdiutil detach -force SSHRD
+          sudo hdiutil resize -sectors min ramdisk.dmg
 
-      - name: Resize image
+      - name: Build trustcache
         run: |
           set -ex
+          # Create work/sshtar/ to match sshtarlist.txt paths
+          mkdir -p work/sshtar
 
-          sudo hdiutil resize -debug -verbose -sectors min ramdisk1.dmg
+          # Extract SSH into work/sshtar/
+          ./gtar -x --no-overwrite-dir -f ssh.tar.gz -C work/sshtar
 
-          ls -lah ramdisk1.dmg
+          # Copy mount_filesystems.safe to match the path in sshtarlist.txt
+          cp mount_filesystems.safe work/sshtar/usr/bin/mount_filesystems
 
-      - name: Upload artifact
+          # Append to trustcache using sshtarlist.txt (paths already have work/sshtar/)
+          ./trustcache append 094-32271-023.dmg.trustcache $(cat sshtarlist.txt)
+
+          # Re-sign
+          ./img4 -i 094-32271-023.dmg.trustcache -o trustcache.img4 -A -T rtsc -M IM4M_0x8020
+
+      - name: Sign ramdisk
+        run: |
+          ./img4 -i ramdisk.dmg -o ramdisk.img4 -A -T rdsk -M IM4M_0x8020
+
+      - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ramdisk-with-ssh
-          path: ramdisk1.dmg
+          name: ramdisk-files
+          path: |
+            ramdisk.img4
+            trustcache.img4
