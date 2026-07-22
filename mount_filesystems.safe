@@ -1,5 +1,3 @@
-#!/bin/bash
-
 echo "=== $(date) Mounting all filesystems ==="
 
 mkdir -p /mnt1 /mnt2 /mnt6 /mnt7
