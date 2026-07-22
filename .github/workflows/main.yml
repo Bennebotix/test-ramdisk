@@ -20,32 +20,48 @@ jobs:
           IPSW_URL="https://updates.cdn-apple.com/2026WinterFCS/fullrestores/122-34179/047B0DE1-4C17-4CBB-ACA7-1EBBF92EE193/iPhone11,8_18.7.9_22H355_Restore.ipsw"
 
           ./pzb -g BuildManifest.plist "$IPSW_URL"
-
           RAMDISK_PATH=$(grep -A50 "RestoreRamDisk" BuildManifest.plist | grep -A1 "Path" | tail -1 | sed 's/.*<string>\(.*\)<\/string>.*/\1/')
           ./pzb -g "$RAMDISK_PATH" "$IPSW_URL"
 
           RAMDISK_FILE=$(ls *.dmg | head -1)
           ./img4 -i "$RAMDISK_FILE" -o ramdisk.dmg
 
-      - name: Inject SSH and mount_filesystems into ramdisk
+      - name: Mount original and create new ramdisk
         run: |
           set -ex
-
-          # RESIZE FIRST!
-          sudo hdiutil resize -size 210m ramdisk.dmg
-
           mkdir -p SSHRD
+
+          # Mount original ramdisk
           sudo hdiutil attach -mountpoint SSHRD -owners off ramdisk.dmg
 
-          ./gtar -x --no-overwrite-dir -f ssh.tar.gz -C SSHRD
+          # Create a new 210MB ramdisk from the mounted contents
+          sudo hdiutil create \
+            -size 210m \
+            -imagekey diskimage-class=CRawDiskImage \
+            -format UDIF \
+            -fs APFS \
+            -layout NONE \
+            -srcfolder SSHRD \
+            -copyuid root \
+            ramdisk1.dmg
 
+          sudo hdiutil detach -force SSHRD
+
+      - name: Mount new ramdisk and add SSH + mount_filesystems
+        run: |
+          set -ex
+          mkdir -p SSHRD
+          sudo hdiutil attach -mountpoint SSHRD -owners off ramdisk1.dmg
+
+          ./gtar -x --no-overwrite-dir -f ssh.tar.gz -C SSHRD
           cp mount_filesystems.safe SSHRD/usr/bin/mount_filesystems
           chmod 755 SSHRD/usr/bin/mount_filesystems
 
           sudo hdiutil detach -force SSHRD
 
-          # Resize down after extraction
-          sudo hdiutil resize -sectors min ramdisk.dmg
+      - name: Resize image
+        run: |
+          sudo hdiutil resize -sectors min ramdisk1.dmg
 
       - name: Build trustcache
         run: |
@@ -54,16 +70,14 @@ jobs:
 
           mkdir -p work/sshtar
           ./gtar -x --no-overwrite-dir -f ssh.tar.gz -C work/sshtar
-
           cp mount_filesystems.safe work/sshtar/usr/bin/mount_filesystems
 
           ./trustcache append trustcache.bin $(cat sshtarlist.txt)
-
           ./img4 -i trustcache.bin -o trustcache.img4 -A -T rtsc -M IM4M_0x8020
 
       - name: Sign ramdisk
         run: |
-          ./img4 -i ramdisk.dmg -o ramdisk.img4 -A -T rdsk -M IM4M_0x8020
+          ./img4 -i ramdisk1.dmg -o ramdisk.img4 -A -T rdsk -M IM4M_0x8020
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
