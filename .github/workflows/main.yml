@@ -41,20 +41,23 @@ jobs:
       - name: Build trustcache
         run: |
           set -ex
+          # Extract trustcache IM4P to .bin
+          ./img4 -i 094-32271-023.dmg.trustcache -o trustcache.bin
+
           # Create work/sshtar/ to match sshtarlist.txt paths
           mkdir -p work/sshtar
 
           # Extract SSH into work/sshtar/
           ./gtar -x --no-overwrite-dir -f ssh.tar.gz -C work/sshtar
 
-          # Copy mount_filesystems.safe to match the path in sshtarlist.txt
+          # Copy mount_filesystems.safe
           cp mount_filesystems.safe work/sshtar/usr/bin/mount_filesystems
 
-          # Append to trustcache using sshtarlist.txt (paths already have work/sshtar/)
-          ./trustcache append 094-32271-023.dmg.trustcache $(cat sshtarlist.txt)
+          # Append to trustcache.bin
+          ./trustcache append trustcache.bin $(cat sshtarlist.txt)
 
-          # Re-sign
-          ./img4 -i 094-32271-023.dmg.trustcache -o trustcache.img4 -A -T rtsc -M IM4M_0x8020
+          # Re-sign to trustcache.img4
+          ./img4 -i trustcache.bin -o trustcache.img4 -A -T rtsc -M IM4M_0x8020
 
       - name: Sign ramdisk
         run: |
