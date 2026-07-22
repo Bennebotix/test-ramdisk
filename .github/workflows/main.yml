@@ -94,7 +94,7 @@ jobs:
 
           sudo hdiutil detach -force SSHRD
 
-      - name: Mount new ramdisk and add SSH
+      - name: Mount new ramdisk and add SSH + mount_filesystems
         run: |
           set -ex
 
@@ -111,7 +111,16 @@ jobs:
 
           ls -la SSHRD
 
+          # Extract SSH
           ./gtar -x --no-overwrite-dir -f ssh.tar -C SSHRD
+
+          # ADD mount_filesystems.safe
+          echo "===== Adding mount_filesystems.safe ====="
+          cp mount_filesystems.safe SSHRD/usr/bin/mount_filesystems
+          chmod 755 SSHRD/usr/bin/mount_filesystems
+
+          # Verify
+          ls -la SSHRD/usr/bin/mount_filesystems
 
           echo "===== After extraction ====="
 
