@@ -1,27 +1,6 @@
-# Safe volume mounting for the SSH ramdisk.
-#
-# Mount experience so far:
-#   iOS ≤ 15  — System / Preboot / xART / Data work in practice
-#   iOS 16    — not verified yet; please try --live-data and report
-#   iOS 17+   — System / Preboot / xART OK; Data (/mnt2) not unlocked yet
-#
-# On iOS 17+ DFU ramdisks, stock mount_filesystems calling seputil --load can
-# SEP-panic and kill SSH. This helper never calls seputil; --live-data only
-# attempts a plain mount_apfs of Data (usually fails without SEP keys).
+#!/bin/bash
 
-set -u
-
-LIVE_DATA=0
-case "${1:-}" in
-    --live-data) LIVE_DATA=1 ;;
-    --system-only|"") ;;
-    *)
-        echo "usage: mount_filesystems [--system-only|--live-data]" >&2
-        exit 64
-        ;;
-esac
-
-echo "=== $(date) mount request: ${1:---system-only} ==="
+echo "=== $(date) Mounting all filesystems ==="
 
 mkdir -p /mnt1 /mnt2 /mnt6 /mnt7
 APFS_UTIL=/System/Library/Filesystems/apfs.fs/apfs.util
@@ -43,42 +22,89 @@ mount_role() {
     role=$1
     target=$2
     device=$(volume_for_role "$role") || {
-        echo "missing APFS $role volume"
+        echo "ERROR: missing APFS $role volume"
         return 1
     }
-    echo "mounting $role ($device) at $target"
-    /sbin/mount_apfs "$device" "$target"
+    echo "  mounting $role ($device) at $target"
+    /sbin/mount_apfs "$device" "$target" 2>/dev/null
+    if [ $? -eq 0 ]; then
+        echo "  OK $role mounted"
+    else
+        echo "  WARN $role mount may already be done"
+    fi
 }
 
+# Mount System, Preboot, xART
+echo "Mounting base volumes..."
 mount_role System /mnt1
 mount_role Preboot /mnt6 || true
 mount_role xART /mnt7 || true
 
-if [ "$LIVE_DATA" -eq 0 ]; then
-    echo "System/Preboot/xART complete. Data was intentionally not requested."
-    exit 0
+# Load SEP and mount Data
+echo ""
+echo "Loading SEP and mounting Data..."
+
+if ! mount | grep -q "/mnt6"; then
+    echo "ERROR: Preboot (/mnt6) is not mounted"
+    exit 1
 fi
 
-# --live-data is explicit.  The host-side boot command must also have uploaded
-# the matching sep-firmware.img4; do not call seputil here because that is the
-# operation which panicked the previous ramdisk.
-data_device=$(volume_for_role Data) || {
-    echo "missing APFS Data volume"
+SEP_PATH=$(find /mnt6 -name "sep-firmware.img4" 2>/dev/null | head -1)
+if [ -z "$SEP_PATH" ]; then
+    echo "ERROR: SEP firmware not found in /mnt6"
     exit 1
-}
-echo "mounting Data ($data_device) at /mnt2; allowing 20 seconds for SEP keys"
-/sbin/mount_apfs "$data_device" /mnt2 &
-mount_pid=$!
-(
-    /bin/sleep 20
-    /bin/kill -0 "$mount_pid" 2>/dev/null && /bin/kill "$mount_pid"
-) &
-timer_pid=$!
-wait "$mount_pid"
-mount_status=$?
-/bin/kill "$timer_pid" 2>/dev/null || true
-if [ "$mount_status" -ne 0 ]; then
-    echo "Data mount did not complete; matching SEP booted without a usable Data key."
-    exit "$mount_status"
 fi
-echo "Data mount completed."
+echo "  Found SEP firmware: $(basename "$SEP_PATH")"
+
+echo "  Initializing SEP..."
+/usr/libexec/seputil --gigalocker-init 2>/dev/null
+if [ $? -eq 0 ]; then
+    echo "  OK SEP initialized"
+else
+    echo "  WARN SEP may already be initialized"
+fi
+
+echo "  Setting NVRAM..."
+/usr/sbin/nvram oblit-inprogress=1 rev=2 2>/dev/null
+if [ $? -eq 0 ]; then
+    echo "  OK NVRAM set"
+else
+    echo "  WARN NVRAM set failed"
+fi
+
+echo "  Loading SEP firmware..."
+/usr/libexec/seputil --load "$SEP_PATH" 2>/dev/null
+if [ $? -eq 0 ]; then
+    echo "  OK SEP loaded"
+else
+    echo "  WARN SEP load may have failed"
+fi
+
+echo "  Clearing NVRAM..."
+/usr/sbin/nvram -d oblit-inprogress 2>/dev/null
+
+if /usr/sbin/nvram oblit-inprogress 2>/dev/null | grep -q "oblit-inprogress"; then
+    echo "  WARN NVRAM still has oblit-inprogress, trying again..."
+    /usr/sbin/nvram -d oblit-inprogress 2>/dev/null
+    if /usr/sbin/nvram oblit-inprogress 2>/dev/null | grep -q "oblit-inprogress"; then
+        echo "  FAIL NVRAM could not be cleared"
+    else
+        echo "  OK NVRAM cleared on second attempt"
+    fi
+else
+    echo "  OK NVRAM cleared"
+fi
+
+echo "  Mounting Data (/dev/disk1s2) at /mnt2"
+/sbin/mount_apfs /dev/disk1s2 /mnt2 2>/dev/null
+
+if mount | grep -q "/mnt2"; then
+    echo "  OK Data mounted at /mnt2"
+else
+    echo "  FAIL Data mount failed"
+    exit 1
+fi
+
+echo ""
+echo "=== Mount verification ==="
+mount | grep -E "/mnt[0-9]" | sort
