@@ -59,7 +59,7 @@ jobs:
       - name: Build trustcache
         run: |
           set -ex
-          ./img4 -i 094-32271-023.dmg.trustcache -o trustcache.bin
+          ./img4 -i 097-23346-100.dmg.trustcache -o trustcache.bin
           mkdir -p work/sshtar
           ./gtar -x --no-overwrite-dir -f ssh.tar.gz -C work/sshtar
           cp mount_filesystems.safe work/sshtar/usr/bin/mount_filesystems
