@@ -1,6 +1,7 @@
+#!/bin/bash
 echo "=== $(date) Mounting all filesystems ==="
 
-mkdir -p /mnt1 /mnt2 /mnt6 /mnt7
+mkdir -p /mnt1 /mnt2 /mnt6 /mnt7 /mnt8
 APFS_UTIL=/System/Library/Filesystems/apfs.fs/apfs.util
 
 volume_for_role() {
@@ -32,17 +33,18 @@ mount_role() {
     fi
 }
 
-# Mount System, Preboot, xART
+# Mount System, Preboot, xART, User
 echo "Mounting base volumes..."
 mount_role System /mnt1
 mount_role Preboot /mnt6 || true
 mount_role xART /mnt7 || true
+mount_role User /mnt8 || true
 
 # Load SEP and mount Data
 echo ""
 echo "Loading SEP and mounting Data..."
 
-if ! mount | grep -q "/mnt6"; then
+if ! /bin/mount | grep -q "/mnt6"; then
     echo "ERROR: Preboot (/mnt6) is not mounted"
     exit 1
 fi
@@ -96,7 +98,7 @@ fi
 echo "  Mounting Data (/dev/disk1s2) at /mnt2"
 /sbin/mount_apfs /dev/disk1s2 /mnt2 2>/dev/null
 
-if mount | grep -q "/mnt2"; then
+if /bin/mount | grep -q "/mnt2"; then
     echo "  OK Data mounted at /mnt2"
 else
     echo "  FAIL Data mount failed"
@@ -105,4 +107,4 @@ fi
 
 echo ""
 echo "=== Mount verification ==="
-mount | grep -E "/mnt[0-9]"
+/bin/mount | grep -E "/mnt[0-9]"
