@@ -1,3 +1,4 @@
+#!/bin/bash
 echo "=== $(date) Mounting all filesystems ==="
 
 mkdir -p /mnt1 /mnt2 /mnt6 /mnt7 /mnt8
@@ -32,12 +33,11 @@ mount_role() {
     fi
 }
 
-# Mount System, Preboot, xART, User
+# Mount System, Preboot, xART
 echo "Mounting base volumes..."
 mount_role System /mnt1
 mount_role Preboot /mnt6 || true
 mount_role xART /mnt7 || true
-mount_role User /mnt8 || true
 
 # Load SEP and mount Data
 echo ""
@@ -94,15 +94,20 @@ else
     echo "  OK NVRAM cleared"
 fi
 
-echo "  Mounting Data (/dev/disk1s2) at /mnt2"
-/sbin/mount_apfs /dev/disk1s2 /mnt2 2>/dev/null
-
+# Mount Data dynamically
+echo "  Mounting Data..."
+mount_role Data /mnt2
 if /bin/mount | grep -q "/mnt2"; then
     echo "  OK Data mounted at /mnt2"
 else
     echo "  FAIL Data mount failed"
     exit 1
 fi
+
+# Mount User volume (/mnt8) - AFTER Data is mounted
+echo ""
+echo "Mounting User volume..."
+mount_role User /mnt8 || true
 
 echo ""
 echo "=== Mount verification ==="
