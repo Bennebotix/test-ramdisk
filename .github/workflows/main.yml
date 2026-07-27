@@ -17,7 +17,7 @@ jobs:
       - name: Download and decrypt ramdisk
         run: |
           set -ex
-          IPSW_URL="https://updates.cdn-apple.com/2025WinterFCS/fullrestores/072-67238/0B0AA2FF-B865-48C3-858F-EBECD1D83D41/iPad_10.2_2020_18.3_22D63_Restore.ipsw"
+          IPSW_URL="https://updates.cdn-apple.com/2026WinterFCS/fullrestores/122-58478/01366B1B-7B2C-4758-93A7-893F49FB310B/iPhone11,2,iPhone11,4,iPhone11,6_18.7.8_22H352_Restore.ipsw"
 
           ./pzb -g BuildManifest.plist "$IPSW_URL"
           RAMDISK_PATH=$(grep -A50 "RestoreRamDisk" BuildManifest.plist | grep -A1 "Path" | tail -1 | sed 's/.*<string>\(.*\)<\/string>.*/\1/')
